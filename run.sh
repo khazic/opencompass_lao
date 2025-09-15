@@ -29,17 +29,22 @@ if [[ -z "${ALL_PROXY:-}" && -n "${https_proxy:-}" ]]; then export ALL_PROXY="$h
 echo "Proxy: http=$(mask_url "${http_proxy:-}") https=$(mask_url "${https_proxy:-}") all=$(mask_url "${ALL_PROXY:-}") no_proxy=${no_proxy:-none}"
 
 # Prefer local dataset cache to avoid downloads in restricted envs
-export COMPASS_DATA_CACHE=${COMPASS_DATA_CACHE:-/xfr_ceph_sh/liuchonghan/opencompass_data}
+export COMPASS_DATA_CACHE=${COMPASS_DATA_CACHE:-/xfr_ceph_sh/liuchonghan/opencompass_lao}
 mkdir -p "$COMPASS_DATA_CACHE"
 
+# 在第34行后添加
+export OPENCOMPASS_DATASETS_PATH="$COMPASS_DATA_CACHE/data"
+export OPENCOMPASS_CACHE_DIR="$COMPASS_DATA_CACHE/data"
+export COMPASS_ALLOW_DOWNLOAD=0  # 禁止下载，强制使用本地数据
+
 # Select benchmark set: ifeval | safety | subjective | custom
-BENCH=${BENCH:-ifeval}
+BENCH=${BENCH:-custom}  # 将默认值从 ifeval 改为 custom
 
 case "$BENCH" in
   ifeval)
     config_path="configs/benches/ifeval_5k.py"
     out_dir="outputs/ifeval_5k"
-    required_data=("data/ifeval")
+    required_data=("data") # 或者直接设为空数组: required_data=()
     ;;
   safety)
     config_path="configs/benches/if_plus_safety_5k.py"
@@ -54,7 +59,7 @@ case "$BENCH" in
   custom)
     config_path="configs/user_bench_5k.py"
     out_dir="outputs/user_bench_5k"
-    required_data=( )
+    required_data=("data")  # 只需检查 data 目录存在即可
     ;;
   *)
     config_path="configs/benches/if_plus_safety_5k.py"
@@ -88,52 +93,7 @@ download_with_mirrors() {
   return 1
 }
 
-prefetch_datasets() {
-  local base="$COMPASS_DATA_CACHE/data"
-  mkdir -p "$base"
-  # IFEval expects: $COMPASS_DATA_CACHE/data/ifeval/input_data.jsonl
-  if [[ ! -s "$base/ifeval/input_data.jsonl" ]]; then
-    echo "[prefetch] IFEval 本地未找到，尝试通过代理预取..."
-    # 允许用户自定义镜像地址：COMPASS_IFEVAL_URL，或尝试多镜像
-    local url_main="https://opencompass.oss-cn-shanghai.aliyuncs.com/datasets/data/ifeval.zip"
-    local url_http="http://opencompass.oss-cn-shanghai.aliyuncs.com/datasets/data/ifeval.zip"
-    local url_accel="https://opencompass.oss-accelerate.aliyuncs.com/datasets/data/ifeval.zip"
-    local url_custom="${COMPASS_IFEVAL_URL:-}"
-    local z="$base/ifeval.zip"
-    echo "[prefetch] 下载 IFEval..."
-    download_with_mirrors "$z" "$url_custom" "$url_main" "$url_accel" "$url_http" || true
-    if [[ -s "$z" ]]; then
-      echo "[prefetch] 解压 IFEval..."
-      mkdir -p "$base/ifeval"
-      if command -v unzip >/dev/null 2>&1; then
-        unzip -o "$z" -d "$base/ifeval" >/dev/null 2>&1 || true
-      else
-        python - "$z" "$base/ifeval" <<'PY'
-import sys, zipfile, os
-z, dst = sys.argv[1:]
-os.makedirs(dst, exist_ok=True)
-with zipfile.ZipFile(z, 'r') as f:
-    f.extractall(dst)
-PY
-      fi
-      if [[ -s "$base/ifeval/input_data.jsonl" ]]; then
-        echo "[prefetch] IFEval 预取完成。"
-      else
-        echo "[prefetch] 解压后未找到 input_data.jsonl，将回退为运行时自动下载。"
-      fi
-    else
-      echo "[prefetch] 下载失败，将回退为运行时自动下载。"
-    fi
-  fi
-
-  # CValues 本地文件（用于 safety 组合）
-  if [[ ! -s "$base/cvalues_responsibility_mc.jsonl" && -n "${COMPASS_CVALUES_URL:-}" ]]; then
-    echo "[prefetch] CValues 本地未找到，尝试从镜像下载..."
-    download_with_mirrors "$base/cvalues_responsibility_mc.jsonl" "$COMPASS_CVALUES_URL" || true
-  fi
-}
-
-prefetch_datasets
+# prefetch_datasets
 
 declare -A models=(
     ["RLer_MtPO_allenai_025"]="/xfr_ceph_sh/liuchonghan/paper_model/RLer_MtPO_allenai_025"
