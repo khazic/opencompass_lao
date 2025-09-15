@@ -73,13 +73,16 @@ prefetch_datasets() {
   # IFEval expects: $COMPASS_DATA_CACHE/data/ifeval/input_data.jsonl
   if [[ ! -s "$base/ifeval/input_data.jsonl" ]]; then
     echo "[prefetch] IFEval 本地未找到，尝试通过代理预取..."
-    local url="http://opencompass.oss-cn-shanghai.aliyuncs.com/datasets/data/ifeval.zip"
+    # Prefer HTTPS; some proxies屏蔽明文HTTP
+    local url="https://opencompass.oss-cn-shanghai.aliyuncs.com/datasets/data/ifeval.zip"
     local z="$base/ifeval.zip"
     # Use curl if available; it respects http_proxy/https_proxy
     if command -v curl >/dev/null 2>&1; then
       for i in 1 2 3; do
         echo "[prefetch] 下载 IFEval (重试第 $i 次)..."
-        if curl -L --fail --retry 3 --connect-timeout 20 -o "$z" "$url"; then
+        if curl -L --fail --retry 3 --retry-delay 2 \
+              --connect-timeout 15 --max-time 300 \
+              -o "$z" "$url"; then
           break
         fi
         sleep 2
