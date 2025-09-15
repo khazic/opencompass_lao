@@ -36,6 +36,23 @@ datasets=(
     "winogrande"          # 保持不变
 )
 
+# 进度条函数
+progress_bar() {
+    local width=50
+    local percent=$1
+    local completed=$((width * percent / 100))
+    local remaining=$((width - completed))
+    
+    printf "["
+    printf "%${completed}s" | tr ' ' '#'
+    printf "%${remaining}s" | tr ' ' ' '
+    printf "] %3d%%\n" "$percent"
+}
+
+# 创建进度状态文件
+progress_dir="$out_dir/progress"
+mkdir -p "$progress_dir"
+
 echo "开始评测..."
 echo "使用数据集: ${datasets[*]}"
 echo "评测模型数: ${#models[@]}"
@@ -49,6 +66,84 @@ slot_idx=0
 total_models=${#models[@]}
 current_model=0
 
+# 启动进度监控函数
+monitor_progress() {
+    local interval=5  # 更新间隔（秒）
+    
+    while true; do
+        clear
+        echo "OpenCompass 评测进度 - $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "=========================================="
+        
+        # 计算总体进度
+        local total_percent=0
+        local completed_models=0
+        local active_models=0
+        
+        for model_name in "${!models[@]}"; do
+            local progress_file="$progress_dir/${model_name}_progress.txt"
+            local status_file="$progress_dir/${model_name}_status.txt"
+            local task_file="$progress_dir/${model_name}_task.txt"
+            
+            if [[ -f "$status_file" ]]; then
+                local status=$(cat "$status_file")
+                if [[ "$status" == "completed" ]]; then
+                    ((completed_models++))
+                    total_percent=$((total_percent + 100))
+                    echo -e "✅ \033[1;32m${model_name}\033[0m [完成]"
+                    progress_bar 100
+                elif [[ "$status" == "failed" ]]; then
+                    ((completed_models++))
+                    total_percent=$((total_percent + 100))
+                    echo -e "❌ \033[1;31m${model_name}\033[0m [失败]"
+                    progress_bar 100
+                else
+                    ((active_models++))
+                    if [[ -f "$progress_file" ]]; then
+                        local percent=$(cat "$progress_file")
+                        local current_task=""
+                        if [[ -f "$task_file" ]]; then
+                            current_task=$(cat "$task_file")
+                        fi
+                        total_percent=$((total_percent + percent))
+                        echo -e "🔄 \033[1;33m${model_name}\033[0m [运行中 - $current_task]"
+                        progress_bar "$percent"
+                    else
+                        echo -e "⏳ \033[1;34m${model_name}\033[0m [等待中]"
+                        progress_bar 0
+                    fi
+                fi
+            else
+                echo -e "⏳ \033[1;34m${model_name}\033[0m [等待中]"
+                progress_bar 0
+            fi
+        done
+        
+        # 计算平均进度
+        if [[ $total_models -gt 0 ]]; then
+            local avg_percent=$((total_percent / total_models))
+            echo ""
+            echo -e "\033[1;36m总体进度\033[0m: $completed_models/$total_models 模型完成"
+            progress_bar "$avg_percent"
+        fi
+        
+        echo ""
+        echo "结果目录: $out_dir/"
+        echo "日志目录: logs/"
+        
+        # 如果所有模型都完成了，退出监控
+        if [[ $completed_models -eq $total_models ]]; then
+            break
+        fi
+        
+        sleep $interval
+    done
+}
+
+# 启动进度监控（后台运行）
+monitor_progress &
+monitor_pid=$!
+
 for model_name in "${!models[@]}"; do
     current_model=$((current_model + 1))
     model_path=${models[$model_name]}
@@ -60,17 +155,15 @@ for model_name in "${!models[@]}"; do
     echo "模型路径：$model_path"
     echo "开始时间：$(date '+%Y-%m-%d %H:%M:%S')"
     
-    # 构建数据集参数
-    datasets_args=""
-    for ds in "${datasets[@]}"; do
-        datasets_args+=" $ds"
-    done
-    
     # 定义要使用的配置文件
     config_file="examples/eval_base_demo.py"
 
     # 启动评测进程
     (
+        # 创建初始进度
+        echo "0" > "$progress_dir/${model_name}_progress.txt"
+        echo "初始化中..." > "$progress_dir/${model_name}_task.txt"
+        
         CUDA_VISIBLE_DEVICES=$gpu_id \
         HF_ENDPOINT=https://hf-mirror.com \
         OC_HF_TYPE=chat \
@@ -90,6 +183,58 @@ for model_name in "${!models[@]}"; do
             --retry 3 \
             --debug \
             > "$log_file" 2>&1
+            
+        # 更新进度状态（成功）
+        if [ $? -eq 0 ]; then
+            echo "completed" > "$progress_dir/${model_name}_status.txt"
+        else
+            echo "failed" > "$progress_dir/${model_name}_status.txt"
+        fi
+    ) &
+    
+    # 启动进度更新进程
+    (
+        # 每5秒更新一次进度
+        while true; do
+            # 检查评测是否完成
+            if [[ -f "$progress_dir/${model_name}_status.txt" ]]; then
+                break
+            fi
+            
+            # 从日志中提取进度信息
+            if [[ -f "$log_file" ]]; then
+                # 从OpenCompass日志中提取当前任务
+                current_task=$(grep -a "INFO - Task" "$log_file" | tail -1 | sed 's/.*Task \[\(.*\)\].*/\1/' 2>/dev/null || echo "准备中")
+                echo "$current_task" > "$progress_dir/${model_name}_task.txt"
+                
+                # 从日志中提取进度条
+                progress_line=$(grep -a "%" "$log_file" | grep -a "██" | tail -1 | tr -d '\r' 2>/dev/null)
+                if [[ -n "$progress_line" ]]; then
+                    # 提取百分比
+                    percent=$(echo "$progress_line" | grep -o '[0-9]\+%' | grep -o '[0-9]\+' | head -1)
+                    if [[ -n "$percent" ]]; then
+                        echo "$percent" > "$progress_dir/${model_name}_progress.txt"
+                    fi
+                fi
+                
+                # 任务总数估计
+                total_tasks=$(grep -a "INFO - Task" "$log_file" | wc -l)
+                completed_tasks=$(grep -a "INFO - Start inferencing" "$log_file" | wc -l)
+                
+                if [[ $total_tasks -gt 0 ]]; then
+                    # 获取当前任务的进度
+                    current_percent=$(cat "$progress_dir/${model_name}_progress.txt")
+                    
+                    # 计算总体进度
+                    if [[ $completed_tasks -gt 0 ]]; then
+                        overall_percent=$(( (completed_tasks - 1) * 100 / total_tasks + current_percent / total_tasks ))
+                        echo "$overall_percent" > "$progress_dir/${model_name}_progress.txt"
+                    fi
+                fi
+            fi
+            
+            sleep 5
+        done
     ) &
     
     pid=$!
@@ -107,6 +252,9 @@ for p in "${pids[@]}"; do
         echo "查看错误日志：logs/${pid2name[$p]}_${timestamp}.log"
     fi
 done
+
+# 结束进度监控
+kill $monitor_pid 2>/dev/null
 
 echo ""
 echo "评测完成！"
