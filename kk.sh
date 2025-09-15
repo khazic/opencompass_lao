@@ -205,30 +205,36 @@ for model_name in "${!models[@]}"; do
             if [[ -f "$log_file" ]]; then
                 # 从OpenCompass日志中提取当前任务
                 current_task=$(grep -a "INFO - Task" "$log_file" | tail -1 | sed 's/.*Task \[\(.*\)\].*/\1/' 2>/dev/null || echo "准备中")
-                echo "$current_task" > "$progress_dir/${model_name}_task.txt"
-                
-                # 从日志中提取进度条
-                progress_line=$(grep -a "%" "$log_file" | grep -a "██" | tail -1 | tr -d '\r' 2>/dev/null)
-                if [[ -n "$progress_line" ]]; then
-                    # 提取百分比
-                    percent=$(echo "$progress_line" | grep -o '[0-9]\+%' | grep -o '[0-9]\+' | head -1)
-                    if [[ -n "$percent" ]]; then
-                        echo "$percent" > "$progress_dir/${model_name}_progress.txt"
-                    fi
+                if [[ -n "$current_task" ]]; then
+                    echo "$current_task" > "$progress_dir/${model_name}_task.txt"
                 fi
                 
-                # 任务总数估计
-                total_tasks=$(grep -a "INFO - Task" "$log_file" | wc -l)
-                completed_tasks=$(grep -a "INFO - Start inferencing" "$log_file" | wc -l)
+                # 从日志中提取已完成的任务数
+                total_tasks=8  # 估计的总任务数
+                completed_tasks=$(grep -a "INFO - Task" "$log_file" | wc -l)
                 
-                if [[ $total_tasks -gt 0 ]]; then
-                    # 获取当前任务的进度
-                    current_percent=$(cat "$progress_dir/${model_name}_progress.txt")
+                if [[ $completed_tasks -gt 0 ]]; then
+                    # 计算大致百分比进度
+                    percent=$((completed_tasks * 100 / total_tasks))
+                    if [[ $percent -gt 100 ]]; then
+                        percent=100
+                    fi
+                    echo "$percent" > "$progress_dir/${model_name}_progress.txt"
                     
-                    # 计算总体进度
-                    if [[ $completed_tasks -gt 0 ]]; then
-                        overall_percent=$(( (completed_tasks - 1) * 100 / total_tasks + current_percent / total_tasks ))
-                        echo "$overall_percent" > "$progress_dir/${model_name}_progress.txt"
+                    # 额外显示当前任务的详细进度
+                    progress_line=$(grep -a "%" "$log_file" | grep -a "█" | tail -1 2>/dev/null)
+                    if [[ -n "$progress_line" ]]; then
+                        # 提取当前子任务的百分比
+                        subtask_percent=$(echo "$progress_line" | grep -o '[0-9]\+%' | head -1 | tr -d '%')
+                        if [[ -n "$subtask_percent" && "$subtask_percent" != "100" ]]; then
+                            # 当前大任务的进度基数
+                            base_percent=$(( (completed_tasks - 1) * 100 / total_tasks ))
+                            # 当前子任务的权重
+                            weight=$((100 / total_tasks))
+                            # 计算总进度：基础进度 + 当前子任务的加权进度
+                            current_percent=$((base_percent + subtask_percent * weight / 100))
+                            echo "$current_percent" > "$progress_dir/${model_name}_progress.txt"
+                        fi
                     fi
                 fi
             fi
