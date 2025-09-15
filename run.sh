@@ -14,6 +14,20 @@ fi
 
 export HF_ENDPOINT=https://hf-mirror.com
 
+# Proxy normalization and logging (mask credentials in output)
+mask_url() {
+  local u="$1"
+  if [[ -z "$u" ]]; then echo "none"; return; fi
+  echo "$u" | sed -E 's#(://)[^/@]+@#\1***:***@#'
+}
+
+# Sync upper/lower case envs so Python/curl both see them
+if [[ -n "${http_proxy:-}" && -z "${HTTP_PROXY:-}" ]]; then export HTTP_PROXY="$http_proxy"; fi
+if [[ -n "${https_proxy:-}" && -z "${HTTPS_PROXY:-}" ]]; then export HTTPS_PROXY="$https_proxy"; fi
+if [[ -z "${ALL_PROXY:-}" && -n "${https_proxy:-}" ]]; then export ALL_PROXY="$https_proxy"; fi
+
+echo "Proxy: http=$(mask_url "${http_proxy:-}") https=$(mask_url "${https_proxy:-}") all=$(mask_url "${ALL_PROXY:-}") no_proxy=${no_proxy:-none}"
+
 # Prefer local dataset cache to avoid downloads in restricted envs
 export COMPASS_DATA_CACHE=${COMPASS_DATA_CACHE:-/xfr_ceph_sh/liuchonghan/opencompass_data}
 mkdir -p "$COMPASS_DATA_CACHE"
