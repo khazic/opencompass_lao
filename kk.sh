@@ -7,13 +7,11 @@ export OPENCOMPASS_CACHE_DIR=/xfr_ceph_sh/liuchonghan/opencompass_lao/data
 export COMPASS_ALLOW_DOWNLOAD=0
 export HF_ENDPOINT=https://hf-mirror.com
 
-# 定义要使用的GPU
 GPU_LIST=(0 1 2 3 4 5 6 7)
 timestamp=$(date '+%Y%m%d_%H%M%S')
 out_dir="outputs/benchmark_${timestamp}"
 mkdir -p logs "$out_dir"
 
-# 定义模型列表和对应路径
 declare -A models=(
     ["RLer_MtPO_allenai_025"]="/xfr_ceph_sh/liuchonghan/paper_model/RLer_MtPO_allenai_025"
     ["depsk-7b"]="/xfr_ceph_sh/liuchonghan/paper_model/depsk-7b"
@@ -25,7 +23,6 @@ declare -A models=(
     ["seedx-mt"]="/xfr_ceph_sh/liuchonghan/paper_model/seedx-mt"
 )
 
-# 定义要使用的数据集（选择data目录中已有的常见评测集）
 datasets=(
     "mmlu_cot_zero_shot"  # 替换 "mmlu"
     "gsm8k_python"        # 替换 "gsm8k"
@@ -158,6 +155,9 @@ for model_name in "${!models[@]}"; do
     # 定义要使用的配置文件
     config_file="examples/eval_base_demo.py"
 
+    # 构建数据集参数字符串
+    datasets_str=$(IFS=,; echo "${datasets[*]}")
+
     # 启动评测进程
     (
         # 创建初始进度
@@ -177,6 +177,8 @@ for model_name in "${!models[@]}"; do
         OC_GENERATION_KWARGS='{"do_sample": false, "num_beams": 1}' \
         opencompass \
             "$config_file" \
+            --models hf_$model_name \
+            --datasets $datasets_str \
             --max-num-workers 8 \
             --max-workers-per-gpu 1 \
             --work-dir "$out_dir/$model_name" \
