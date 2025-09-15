@@ -2,6 +2,7 @@
 
 MODEL_BASE="/xfr_ceph_sh/liuchonghan/paper_model"
 
+# 使用 demo 中的数据集
 DATASETS="mmlu_cot_zero_shot humaneval cmmlu_zero_shot bbh hellaswag winogrande"
 declare -A MODEL_GPU=(
     ["mistral-7b"]="0"
@@ -20,7 +21,6 @@ for model_name in "${!MODEL_GPU[@]}"; do
     
     echo "启动模型: $model_name 在 GPU $gpu_id"
     
-    # 创建新的 tmux 会话
     tmux new-session -d -s "${model_name}" "
         # 设置环境变量
         export COMPASS_DATA_CACHE=/xfr_ceph_sh/liuchonghan/opencompass_lao
@@ -30,13 +30,15 @@ for model_name in "${!MODEL_GPU[@]}"; do
         export HF_ENDPOINT=https://hf-mirror.com
         export CUDA_VISIBLE_DEVICES=$gpu_id
         
-        # 运行评测
+        # 运行评测 - 使用 demo 中的参数格式
         python run.py \\
-            --models hf_${model_name} \\
             --datasets $DATASETS \\
+            --hf-type chat \\
+            --hf-path '$model_path' \\
             --work-dir '$out_dir/${model_name}' \\
             --max-num-workers 8 \\
             --max-workers-per-gpu 1 \\
+            --debug \\
             > logs/${model_name}_${timestamp}.log 2>&1
             
         # 显示完成消息
