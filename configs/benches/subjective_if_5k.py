@@ -15,56 +15,53 @@ with read_base():
     from opencompass.configs.datasets.subjective.wildbench.wildbench_pair_judge_new import wildbench_datasets  # noqa: F401, F403
 
 
-def _cap(ds_list, test_cap='[:5000]'):
-    capped = []
-    for ds in ds_list:
-        cfg = dict(ds)
-        reader_cfg = dict(cfg.get('reader_cfg', {}))
-        reader_cfg['test_range'] = test_cap
-        cfg['reader_cfg'] = reader_cfg
-        capped.append(cfg)
-    return capped
-
-
-def _build_judge_model_from_env():
-    api_key = os.environ.get('OC_JUDGE_API_KEY')
-    model = os.environ.get('OC_JUDGE_MODEL', 'gpt-4o-2024-05-13')
-    api_base = os.environ.get('OC_JUDGE_API_BASE', 'https://api.openai.com/v1/')
-    if not api_key:
-        return None
-    return dict(
-        type=OpenAISDK,
-        path=model,
-        key=api_key,
-        openai_api_base=[api_base],
-        batch_size=256,
-        temperature=0.0,
-        tokenizer_path=model,
-        max_out_len=8192,
-        max_seq_len=49152,
-        verbose=False,
-    )
-
-
 datasets = []
-# Always include IFEval (objective IF)
-datasets += _cap(ifeval_datasets)
+
+# Always include IFEval (objective IF), capped to 5k
+for _d in ifeval_datasets:
+    _cfg = dict(_d)
+    _reader_cfg = dict(_cfg.get('reader_cfg', {}))
+    _reader_cfg['test_range'] = '[:5000]'
+    _cfg['reader_cfg'] = _reader_cfg
+    datasets.append(_cfg)
 
 # Subjective IF/format/alignment sets (enabled only when judge key is provided)
-_judge_model = _build_judge_model_from_env()
-if _judge_model is not None:
-    datasets += _cap(followbench_llmeval_datasets)
-    datasets += _cap(fofo_datasets)
-    datasets += _cap(alignbench_datasets)
-    datasets += _cap(alpacav2_datasets)
-    datasets += _cap(arenahard_datasets)
-    datasets += _cap(wildbench_datasets)
+_oc_key = os.environ.get('OC_JUDGE_API_KEY')
+_oc_model = os.environ.get('OC_JUDGE_MODEL', 'gpt-4o-2024-05-13')
+_oc_base = os.environ.get('OC_JUDGE_API_BASE', 'https://api.openai.com/v1/')
+
+if _oc_key:
+    for _src in (
+        followbench_llmeval_datasets,
+        fofo_datasets,
+        alignbench_datasets,
+        alpacav2_datasets,
+        arenahard_datasets,
+        wildbench_datasets,
+    ):
+        for _d in _src:
+            _cfg = dict(_d)
+            _reader_cfg = dict(_cfg.get('reader_cfg', {}))
+            _reader_cfg['test_range'] = '[:5000]'
+            _cfg['reader_cfg'] = _reader_cfg
+            datasets.append(_cfg)
 
     # Configure subjective evaluation task with LLM judge
     eval = dict(
         partitioner=dict(
             type=SubjectiveNaivePartitioner,
-            judge_models=[_judge_model],
+            judge_models=[dict(
+                type=OpenAISDK,
+                path=_oc_model,
+                key=_oc_key,
+                openai_api_base=[_oc_base],
+                batch_size=256,
+                temperature=0.0,
+                tokenizer_path=_oc_model,
+                max_out_len=8192,
+                max_seq_len=49152,
+                verbose=False,
+            )],
         ),
         runner=dict(
             type=LocalRunner,

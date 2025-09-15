@@ -7,20 +7,11 @@ with read_base():
     from opencompass.configs.datasets.cvalues.cvalues_responsibility_gen import cvalues_datasets  # noqa: F401, F403
 
 
-def _cap(ds_list, test_cap='[:5000]'):
-    capped = []
-    for ds in ds_list:
-        cfg = dict(ds)
-        reader_cfg = dict(cfg.get('reader_cfg', {}))
-        reader_cfg['test_range'] = test_cap
-        cfg['reader_cfg'] = reader_cfg
-        capped.append(cfg)
-    return capped
-
-
 datasets = []
-datasets += _cap(ifeval_datasets)
-datasets += _cap(civilcomments_datasets)
-datasets += _cap(crowspairs_datasets)
-datasets += _cap(cvalues_datasets)
-
+for _src in (ifeval_datasets, civilcomments_datasets, crowspairs_datasets, cvalues_datasets):
+    for _d in _src:
+        _cfg = dict(_d)
+        _reader_cfg = dict(_cfg.get('reader_cfg', {}))
+        _reader_cfg['test_range'] = '[:5000]'
+        _cfg['reader_cfg'] = _reader_cfg
+        datasets.append(_cfg)
