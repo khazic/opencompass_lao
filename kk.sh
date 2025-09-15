@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# 设置环境变量以使用本地数据集
 export COMPASS_DATA_CACHE=/xfr_ceph_sh/liuchonghan/opencompass_lao
 export OPENCOMPASS_DATASETS_PATH=/xfr_ceph_sh/liuchonghan/opencompass_lao/data
 export OPENCOMPASS_CACHE_DIR=/xfr_ceph_sh/liuchonghan/opencompass_lao/data
@@ -152,8 +151,8 @@ for model_name in "${!models[@]}"; do
     echo "模型路径：$model_path"
     echo "开始时间：$(date '+%Y-%m-%d %H:%M:%S')"
     
-    # 定义要使用的配置文件
-    config_file="examples/eval_base_demo.py"
+    # 定义要使用的配置文件（使用 env 驱动 + 自定义数据集组合）
+    config_file="configs/benches/custom_reasoning_python.py"
 
     # 在第158-159行，不需要构建逗号分隔的字符串
     # 删除这两行:
@@ -175,12 +174,10 @@ for model_name in "${!models[@]}"; do
         OC_BATCH_SIZE=16 \
         OC_MAX_SEQ_LEN=4096 \
         OC_MAX_OUT_LEN=1024 \
-        OC_MODEL_KWARGS='{"trust_remote_code": true, "torch_dtype": "torch.bfloat16", "device_map": "auto"}' \
-        OC_GENERATION_KWARGS='{"do_sample": false, "num_beams": 1}' \
+        OC_MODEL_KWARGS='{"trust_remote_code": true, "dtype": "bfloat16", "device_map": "auto", "attn_implementation": "eager"}' \
+        OC_GENERATION_KWARGS='{"do_sample": false, "num_beams": 1, "use_cache": false}' \
         opencompass \
             "$config_file" \
-            --models hf_$model_name \
-            --datasets ${datasets[@]} \
             --max-num-workers 8 \
             --max-workers-per-gpu 1 \
             --work-dir "$out_dir/$model_name" \
