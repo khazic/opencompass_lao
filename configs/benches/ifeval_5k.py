@@ -74,3 +74,13 @@ models = [
         run_cfg=dict(num_gpus=_num_gpus),
     )
 ]
+
+# Avoid dumping module objects in generated config files
+try:
+    del json
+except Exception:
+    pass
+try:
+    del os
+except Exception:
+    pass
