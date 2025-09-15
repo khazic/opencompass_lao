@@ -3,7 +3,7 @@
 MODEL_BASE="/xfr_ceph_sh/liuchonghan/paper_model"
 
 # 使用 demo 中的数据集
-DATASETS="mmlu_cot_zero_shot humaneval cmmlu_zero_shot bbh hellaswag winogrande"
+DATASETS="mmlu_gen humaneval_gen cmmlu_gen bbh_gen hellaswag_gen winogrande_gen"
 declare -A MODEL_GPU=(
     ["mistral-7b"]="0"
     ["qwen2.5-7b"]="1"

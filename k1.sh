@@ -1,9 +1,10 @@
 #!/bin/bash
 
+# 模型基本路径
 MODEL_BASE="/xfr_ceph_sh/liuchonghan/paper_model"
 
-# 使用 demo 中的数据集
-DATASETS="mmlu_cot_zero_shot humaneval cmmlu_zero_shot bbh hellaswag winogrande"
+DATASETS="mmlu_gen humaneval_gen cmmlu_gen bbh_gen hellaswag_gen winogrande_gen"
+# 模型和对应的GPU
 declare -A MODEL_GPU=(
     ["RLer_MtPO_allenai_025"]="0"
     ["apertus-8b"]="1"
@@ -15,6 +16,7 @@ declare -A MODEL_GPU=(
     ["llamax3-8b"]="7"
 )
 
+# 创建输出目录
 timestamp=$(date '+%Y%m%d_%H%M%S')
 out_dir="outputs/benchmark_${timestamp}"
 mkdir -p "logs" "$out_dir"
@@ -29,22 +31,18 @@ for model_name in "${!MODEL_GPU[@]}"; do
     # 创建新的 tmux 会话
     tmux new-session -d -s "${model_name}" "
         # 设置环境变量
+        export CUDA_VISIBLE_DEVICES=$gpu_id
         export COMPASS_DATA_CACHE=/xfr_ceph_sh/liuchonghan/opencompass_lao
         export OPENCOMPASS_DATASETS_PATH=/xfr_ceph_sh/liuchonghan/opencompass_lao/data
         export OPENCOMPASS_CACHE_DIR=/xfr_ceph_sh/liuchonghan/opencompass_lao/data
         export COMPASS_ALLOW_DOWNLOAD=0
-        export HF_ENDPOINT=https://hf-mirror.com
-        export CUDA_VISIBLE_DEVICES=$gpu_id
         
-        # 运行评测 - 使用 demo 中的参数格式
+        # 运行评测
         python run.py \\
             --datasets $DATASETS \\
-            --hf-type chat \\
             --hf-path '$model_path' \\
+            --hf-type chat \\
             --work-dir '$out_dir/${model_name}' \\
-            --max-num-workers 8 \\
-            --max-workers-per-gpu 1 \\
-            --debug \\
             > logs/${model_name}_${timestamp}.log 2>&1
             
         # 显示完成消息
