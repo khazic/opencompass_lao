@@ -160,17 +160,33 @@ for model_name in "${!models[@]}"; do
     # datasets_str=$(IFS=,; echo "${datasets[*]}")
 
     # 修改第179-181行的参数传递方式
-    OC_MODEL_ABBR="hf_$model_name" \
-    opencompass \
-        "$config_file" \
-        --models hf_$model_name \
-        --datasets ${datasets[@]} \
-        --max-num-workers 8 \
-        --max-workers-per-gpu 1 \
-        --work-dir "$out_dir/$model_name" \
-        --retry 3 \
-        --debug \
-        > "$log_file" 2>&1
+    # 启动评测进程
+    (
+        # 创建初始进度
+        echo "0" > "$progress_dir/${model_name}_progress.txt"
+        echo "初始化中..." > "$progress_dir/${model_name}_task.txt"
+        
+        CUDA_VISIBLE_DEVICES=$gpu_id \
+        HF_ENDPOINT=https://hf-mirror.com \
+        OC_HF_TYPE=chat \
+        OC_HF_PATH="$model_path" \
+        OC_MODEL_ABBR="hf_$model_name" \
+        OC_HF_NUM_GPUS=1 \
+        OC_BATCH_SIZE=16 \
+        OC_MAX_SEQ_LEN=4096 \
+        OC_MAX_OUT_LEN=1024 \
+        OC_MODEL_KWARGS='{"trust_remote_code": true, "torch_dtype": "torch.bfloat16", "device_map": "auto"}' \
+        OC_GENERATION_KWARGS='{"do_sample": false, "num_beams": 1}' \
+        opencompass \
+            "$config_file" \
+            --models hf_$model_name \
+            --datasets ${datasets[@]} \
+            --max-num-workers 8 \
+            --max-workers-per-gpu 1 \
+            --work-dir "$out_dir/$model_name" \
+            --retry 3 \
+            --debug \
+            > "$log_file" 2>&1
             
         # 更新进度状态（成功）
         if [ $? -eq 0 ]; then
