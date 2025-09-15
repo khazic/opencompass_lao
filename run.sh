@@ -69,22 +69,30 @@ echo "Benchmark: $BENCH"
 echo "时间: $(date '+%Y-%m-%d %H:%M:%S')"
 echo "=========================================="
 
-# Preflight: check required datasets exist in cache, otherwise fail fast
-missing=()
-for d in "${required_data[@]}"; do
-  if [[ ! -e "$COMPASS_DATA_CACHE/$d" ]]; then
-    missing+=("$d")
+# Preflight: check required datasets exist in cache.
+# If proxies are set or COMPASS_ALLOW_DOWNLOAD=1, allow auto-download; else fail fast.
+allow_download=${COMPASS_ALLOW_DOWNLOAD:-0}
+if [[ -n "${http_proxy:-}${https_proxy:-}" ]]; then
+  allow_download=1
+fi
+if [[ "$allow_download" != "1" ]]; then
+  missing=()
+  for d in "${required_data[@]}"; do
+    if [[ ! -e "$COMPASS_DATA_CACHE/$d" ]]; then
+      missing+=("$d")
+    fi
+  done
+  if (( ${#missing[@]} > 0 )); then
+    echo "[error] 缺少本地数据集缓存，且未检测到代理或显式允许下载 (COMPASS_ALLOW_DOWNLOAD=1)。" >&2
+    echo "需要存在于 \"$COMPASS_DATA_CACHE\" 下的目录：" >&2
+    for d in "${missing[@]}"; do echo "  - $d" >&2; done
+    echo "解决方案：" >&2
+    echo "1) 在有网络的机器下载 opencompass 数据集压缩包并解压到 $COMPASS_DATA_CACHE/ 对应目录；或" >&2
+    echo "2) 设置代理变量后再运行（已支持 http_proxy/https_proxy）；或" >&2
+    echo "3) 设定 COMPASS_ALLOW_DOWNLOAD=1 允许自动下载；或" >&2
+    echo "4) 修改 COMPASS_DATA_CACHE 指向已有数据集的共享路径。" >&2
+    exit 1
   fi
-done
-if (( ${#missing[@]} > 0 )); then
-  echo "[error] 缺少本地数据集缓存，当前网络受限将导致自动下载失败。" >&2
-  echo "需要存在于 \"$COMPASS_DATA_CACHE\" 下的目录：" >&2
-  for d in "${missing[@]}"; do echo "  - $d" >&2; done
-  echo "解决方案：" >&2
-  echo "1) 在有网络的机器下载 opencompass 数据集压缩包并解压到 $COMPASS_DATA_CACHE/ 对应目录；或" >&2
-  echo "2) 临时放开该机到 opencompass.oss-cn-shanghai.aliyuncs.com 的访问；或" >&2
-  echo "3) 修改 COMPASS_DATA_CACHE 指向已有数据集的共享路径。" >&2
-  exit 1
 fi
 
 # 统计本次将运行的评测集数量
