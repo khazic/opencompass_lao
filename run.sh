@@ -67,29 +67,41 @@ mkdir -p logs "$out_dir"
 timestamp=$(date '+%Y%m%d_%H%M%S')
 
 # Prefetch critical local-mode datasets via proxy if available (avoids 503)
+download_with_mirrors() {
+  # $1: outfile, $2..: urls
+  local out="$1"; shift
+  for url in "$@"; do
+    [[ -z "$url" ]] && continue
+    echo "[prefetch] 尝试下载: $url"
+    if command -v curl >/dev/null 2>&1; then
+      if curl -L --fail --retry 3 --retry-delay 2 \
+           --connect-timeout 15 --max-time 300 \
+           -o "$out" "$url"; then
+        return 0
+      fi
+    elif command -v wget >/dev/null 2>&1; then
+      if wget -O "$out" "$url"; then
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
+
 prefetch_datasets() {
   local base="$COMPASS_DATA_CACHE/data"
   mkdir -p "$base"
   # IFEval expects: $COMPASS_DATA_CACHE/data/ifeval/input_data.jsonl
   if [[ ! -s "$base/ifeval/input_data.jsonl" ]]; then
     echo "[prefetch] IFEval 本地未找到，尝试通过代理预取..."
-    # Prefer HTTPS; some proxies屏蔽明文HTTP
-    local url="https://opencompass.oss-cn-shanghai.aliyuncs.com/datasets/data/ifeval.zip"
+    # 允许用户自定义镜像地址：COMPASS_IFEVAL_URL，或尝试多镜像
+    local url_main="https://opencompass.oss-cn-shanghai.aliyuncs.com/datasets/data/ifeval.zip"
+    local url_http="http://opencompass.oss-cn-shanghai.aliyuncs.com/datasets/data/ifeval.zip"
+    local url_accel="https://opencompass.oss-accelerate.aliyuncs.com/datasets/data/ifeval.zip"
+    local url_custom="${COMPASS_IFEVAL_URL:-}"
     local z="$base/ifeval.zip"
-    # Use curl if available; it respects http_proxy/https_proxy
-    if command -v curl >/dev/null 2>&1; then
-      for i in 1 2 3; do
-        echo "[prefetch] 下载 IFEval (重试第 $i 次)..."
-        if curl -L --fail --retry 3 --retry-delay 2 \
-              --connect-timeout 15 --max-time 300 \
-              -o "$z" "$url"; then
-          break
-        fi
-        sleep 2
-      done
-    elif command -v wget >/dev/null 2>&1; then
-      wget -O "$z" "$url" || true
-    fi
+    echo "[prefetch] 下载 IFEval..."
+    download_with_mirrors "$z" "$url_custom" "$url_main" "$url_accel" "$url_http" || true
     if [[ -s "$z" ]]; then
       echo "[prefetch] 解压 IFEval..."
       mkdir -p "$base/ifeval"
@@ -112,6 +124,12 @@ PY
     else
       echo "[prefetch] 下载失败，将回退为运行时自动下载。"
     fi
+  fi
+
+  # CValues 本地文件（用于 safety 组合）
+  if [[ ! -s "$base/cvalues_responsibility_mc.jsonl" && -n "${COMPASS_CVALUES_URL:-}" ]]; then
+    echo "[prefetch] CValues 本地未找到，尝试从镜像下载..."
+    download_with_mirrors "$base/cvalues_responsibility_mc.jsonl" "$COMPASS_CVALUES_URL" || true
   fi
 }
 
