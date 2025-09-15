@@ -30,7 +30,6 @@ datasets=(
     "mmlu"
     "gsm8k"
     "humaneval"
-    "math"
     "cmmlu"
     "bbh"
     "hellaswag"
@@ -71,10 +70,18 @@ for model_name in "${!models[@]}"; do
     (
         CUDA_VISIBLE_DEVICES=$gpu_id \
         HF_ENDPOINT=https://hf-mirror.com \
+        OC_HF_TYPE=chat \
+        OC_HF_PATH="$model_path" \
+        OC_MODEL_ABBR="$model_name" \
+        OC_HF_NUM_GPUS=1 \
+        OC_BATCH_SIZE=16 \
+        OC_MAX_SEQ_LEN=4096 \
+        OC_MAX_OUT_LEN=1024 \
+        OC_MODEL_KWARGS='{"trust_remote_code": true, "torch_dtype": "torch.bfloat16", "device_map": "auto"}' \
+        OC_GENERATION_KWARGS='{"do_sample": false, "num_beams": 1}' \
         python run.py \
             --models hf_$model_name \
             --datasets $datasets_args \
-            --model-args "path='$model_path' trust_remote_code=True torch_dtype='torch.bfloat16' device_map='auto'" \
             --work-dir "$out_dir/$model_name" \
             --debug \
             > "$log_file" 2>&1
