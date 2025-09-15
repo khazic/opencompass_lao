@@ -34,9 +34,9 @@ _max_seq_len = int(os.environ.get('OC_MAX_SEQ_LEN', '4096'))
 _max_out_len = int(os.environ.get('OC_MAX_OUT_LEN', '1024'))
 
 try:
-    _model_kwargs = json.loads(os.environ.get('OC_MODEL_KWARGS', '{"trust_remote_code": true, "dtype": "bfloat16", "device_map": "auto"}'))
+    _model_kwargs = json.loads(os.environ.get('OC_MODEL_KWARGS', '{"trust_remote_code": true, "torch_dtype": "torch.bfloat16", "device_map": "auto"}'))
 except Exception:
-    _model_kwargs = {"trust_remote_code": True, "dtype": "bfloat16", "device_map": "auto"}
+    _model_kwargs = {"trust_remote_code": True, "torch_dtype": "torch.bfloat16", "device_map": "auto"}
 try:
     _generation_kwargs = json.loads(os.environ.get('OC_GENERATION_KWARGS', '{"do_sample": false, "num_beams": 1}'))
 except Exception:
