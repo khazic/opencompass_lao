@@ -24,12 +24,6 @@ from opencompass.models import (  # noqa: E402
     HuggingFacewithChatTemplate,
 )
 
-def _get_env_json(key: str, default: str):
-    try:
-        return json.loads(os.environ.get(key, default) or default)
-    except Exception:
-        return json.loads(default)
-
 _hf_path = os.environ.get('OC_HF_PATH', '')
 _abbr = os.environ.get('OC_MODEL_ABBR', os.path.basename(_hf_path.rstrip('/')) or 'hf_model')
 _hf_type = os.environ.get('OC_HF_TYPE', 'chat')
@@ -39,14 +33,29 @@ _batch_size = int(os.environ.get('OC_BATCH_SIZE', '16'))
 _max_seq_len = int(os.environ.get('OC_MAX_SEQ_LEN', '4096'))
 _max_out_len = int(os.environ.get('OC_MAX_OUT_LEN', '1024'))
 
-_model_kwargs = _get_env_json('OC_MODEL_KWARGS', '{"trust_remote_code": true, "dtype": "bfloat16", "device_map": "auto"}')
-_generation_kwargs = _get_env_json('OC_GENERATION_KWARGS', '{"do_sample": false, "num_beams": 1}')
+try:
+    _model_kwargs = json.loads(os.environ.get('OC_MODEL_KWARGS', '{"trust_remote_code": true, "dtype": "bfloat16", "device_map": "auto"}'))
+except Exception:
+    _model_kwargs = {"trust_remote_code": True, "dtype": "bfloat16", "device_map": "auto"}
+try:
+    _generation_kwargs = json.loads(os.environ.get('OC_GENERATION_KWARGS', '{"do_sample": false, "num_beams": 1}'))
+except Exception:
+    _generation_kwargs = {"do_sample": False, "num_beams": 1}
 _tokenizer_path = os.environ.get('OC_TOKENIZER_PATH', None)
-_tokenizer_kwargs = _get_env_json('OC_TOKENIZER_KWARGS', '{}')
+try:
+    _tokenizer_kwargs = json.loads(os.environ.get('OC_TOKENIZER_KWARGS', '{}'))
+except Exception:
+    _tokenizer_kwargs = {}
 _peft_path = os.environ.get('OC_PEFT_PATH', None)
-_peft_kwargs = _get_env_json('OC_PEFT_KWARGS', '{}')
+try:
+    _peft_kwargs = json.loads(os.environ.get('OC_PEFT_KWARGS', '{}'))
+except Exception:
+    _peft_kwargs = {}
 _pad_token_id = os.environ.get('OC_PAD_TOKEN_ID', None)
-_stop_words = _get_env_json('OC_STOP_WORDS', '[]')
+try:
+    _stop_words = json.loads(os.environ.get('OC_STOP_WORDS', '[]'))
+except Exception:
+    _stop_words = []
 
 _mod = HuggingFacewithChatTemplate if _hf_type == 'chat' else HuggingFaceBaseModel
 
