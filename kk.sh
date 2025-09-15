@@ -27,13 +27,13 @@ declare -A models=(
 
 # 定义要使用的数据集（选择data目录中已有的常见评测集）
 datasets=(
-    "mmlu"
-    "gsm8k"
-    "humaneval"
-    "cmmlu"
-    "bbh"
-    "hellaswag"
-    "winogrande"
+    "mmlu_cot_zero_shot"  # 替换 "mmlu"
+    "gsm8k_python"        # 替换 "gsm8k"
+    "humaneval_python"    # 替换 "humaneval"
+    "cmmlu_zero_shot"     # 替换 "cmmlu"
+    "bbh_cot"             # 替换 "bbh"
+    "hellaswag"           # 保持不变
+    "winogrande"          # 保持不变
 )
 
 echo "开始评测..."
@@ -66,6 +66,9 @@ for model_name in "${!models[@]}"; do
         datasets_args+=" $ds"
     done
     
+    # 定义要使用的配置文件
+    config_file="examples/eval_base_demo.py"
+
     # 启动评测进程
     (
         CUDA_VISIBLE_DEVICES=$gpu_id \
@@ -79,10 +82,12 @@ for model_name in "${!models[@]}"; do
         OC_MAX_OUT_LEN=1024 \
         OC_MODEL_KWARGS='{"trust_remote_code": true, "torch_dtype": "torch.bfloat16", "device_map": "auto"}' \
         OC_GENERATION_KWARGS='{"do_sample": false, "num_beams": 1}' \
-        python run.py \
-            --models hf_$model_name \
-            --datasets $datasets_args \
+        opencompass \
+            "$config_file" \
+            --max-num-workers 8 \
+            --max-workers-per-gpu 1 \
             --work-dir "$out_dir/$model_name" \
+            --retry 3 \
             --debug \
             > "$log_file" 2>&1
     ) &
