@@ -68,6 +68,8 @@ timestamp=$(date '+%Y%m%d_%H%M%S')
 
 declare -A models=(
     ["RLer_MtPO_allenai_025"]="/xfr_ceph_sh/liuchonghan/paper_model/RLer_MtPO_allenai_025"
+    ["depsk-7b"]="/xfr_ceph_sh/liuchonghan/paper_model/depsk-7b"
+    ["mistral-7b"]="/xfr_ceph_sh/liuchonghan/paper_model/mistral-7b"
     ["hunyuan-mt"]="/xfr_ceph_sh/liuchonghan/paper_model/hunyuan-mt"
     ["llama3.1-8b"]="/xfr_ceph_sh/liuchonghan/paper_model/llama3.1-8b"
     ["qwen2.5-7b"]="/xfr_ceph_sh/liuchonghan/paper_model/qwen2.5-7b"
@@ -85,7 +87,7 @@ echo "=========================================="
 
 # Preflight: check required datasets exist in cache.
 # If proxies are set or COMPASS_ALLOW_DOWNLOAD=1, allow auto-download; else fail fast.
-allow_download=${COMPASS_ALLOW_DOWNLOAD:-0}
+allow_download=${COMPASS_ALLOW_DOWNLOAD:-1}
 if [[ -n "${http_proxy:-}${https_proxy:-}" ]]; then
   allow_download=1
 fi
@@ -150,7 +152,7 @@ for model_name in "${!models[@]}"; do
       OC_BATCH_SIZE=16 \
       OC_MAX_SEQ_LEN=4096 \
       OC_MAX_OUT_LEN=1024 \
-      OC_MODEL_KWARGS='{"trust_remote_code": true, "dtype": "bfloat16", "device_map": "auto"}' \
+      OC_MODEL_KWARGS='{"trust_remote_code": true, "torch_dtype": "torch.bfloat16", "device_map": "auto"}' \
       OC_GENERATION_KWARGS='{"do_sample": false, "num_beams": 1}' \
       opencompass \
           "$config_path" \
