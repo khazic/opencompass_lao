@@ -66,6 +66,54 @@ esac
 mkdir -p logs "$out_dir"
 timestamp=$(date '+%Y%m%d_%H%M%S')
 
+# Prefetch critical local-mode datasets via proxy if available (avoids 503)
+prefetch_datasets() {
+  local base="$COMPASS_DATA_CACHE/data"
+  mkdir -p "$base"
+  # IFEval expects: $COMPASS_DATA_CACHE/data/ifeval/input_data.jsonl
+  if [[ ! -s "$base/ifeval/input_data.jsonl" ]]; then
+    echo "[prefetch] IFEval 本地未找到，尝试通过代理预取..."
+    local url="http://opencompass.oss-cn-shanghai.aliyuncs.com/datasets/data/ifeval.zip"
+    local z="$base/ifeval.zip"
+    # Use curl if available; it respects http_proxy/https_proxy
+    if command -v curl >/dev/null 2>&1; then
+      for i in 1 2 3; do
+        echo "[prefetch] 下载 IFEval (重试第 $i 次)..."
+        if curl -L --fail --retry 3 --connect-timeout 20 -o "$z" "$url"; then
+          break
+        fi
+        sleep 2
+      done
+    elif command -v wget >/dev/null 2>&1; then
+      wget -O "$z" "$url" || true
+    fi
+    if [[ -s "$z" ]]; then
+      echo "[prefetch] 解压 IFEval..."
+      mkdir -p "$base/ifeval"
+      if command -v unzip >/dev/null 2>&1; then
+        unzip -o "$z" -d "$base/ifeval" >/dev/null 2>&1 || true
+      else
+        python - "$z" "$base/ifeval" <<'PY'
+import sys, zipfile, os
+z, dst = sys.argv[1:]
+os.makedirs(dst, exist_ok=True)
+with zipfile.ZipFile(z, 'r') as f:
+    f.extractall(dst)
+PY
+      fi
+      if [[ -s "$base/ifeval/input_data.jsonl" ]]; then
+        echo "[prefetch] IFEval 预取完成。"
+      else
+        echo "[prefetch] 解压后未找到 input_data.jsonl，将回退为运行时自动下载。"
+      fi
+    else
+      echo "[prefetch] 下载失败，将回退为运行时自动下载。"
+    fi
+  fi
+}
+
+prefetch_datasets
+
 declare -A models=(
     ["RLer_MtPO_allenai_025"]="/xfr_ceph_sh/liuchonghan/paper_model/RLer_MtPO_allenai_025"
     ["depsk-7b"]="/xfr_ceph_sh/liuchonghan/paper_model/depsk-7b"
