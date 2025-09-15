@@ -14,6 +14,10 @@ fi
 
 export HF_ENDPOINT=https://hf-mirror.com
 
+# Prefer local dataset cache to avoid downloads in restricted envs
+export COMPASS_DATA_CACHE=${COMPASS_DATA_CACHE:-/xfr_ceph_sh/liuchonghan/opencompass_data}
+mkdir -p "$COMPASS_DATA_CACHE"
+
 # Select benchmark set: ifeval | safety | subjective | custom
 BENCH=${BENCH:-ifeval}
 
@@ -21,22 +25,27 @@ case "$BENCH" in
   ifeval)
     config_path="configs/benches/ifeval_5k.py"
     out_dir="outputs/ifeval_5k"
+    required_data=("data/ifeval")
     ;;
   safety)
     config_path="configs/benches/if_plus_safety_5k.py"
     out_dir="outputs/if_plus_safety_5k"
+    required_data=("data/ifeval" "data/civilcomments" "data/crowspairs" "data/cvalues")
     ;;
   subjective)
     config_path="configs/benches/subjective_if_5k.py"
     out_dir="outputs/subjective_if_5k"
+    required_data=("data/ifeval")
     ;;
   custom)
     config_path="configs/user_bench_5k.py"
     out_dir="outputs/user_bench_5k"
+    required_data=( )
     ;;
   *)
     config_path="configs/benches/if_plus_safety_5k.py"
     out_dir="outputs/if_plus_safety_5k"
+    required_data=("data/ifeval" "data/civilcomments" "data/crowspairs" "data/cvalues")
     ;;
 esac
 
@@ -59,6 +68,24 @@ echo "评测配置: $config_path (每个评测集≤5000样本)"
 echo "Benchmark: $BENCH"
 echo "时间: $(date '+%Y-%m-%d %H:%M:%S')"
 echo "=========================================="
+
+# Preflight: check required datasets exist in cache, otherwise fail fast
+missing=()
+for d in "${required_data[@]}"; do
+  if [[ ! -e "$COMPASS_DATA_CACHE/$d" ]]; then
+    missing+=("$d")
+  fi
+done
+if (( ${#missing[@]} > 0 )); then
+  echo "[error] 缺少本地数据集缓存，当前网络受限将导致自动下载失败。" >&2
+  echo "需要存在于 \"$COMPASS_DATA_CACHE\" 下的目录：" >&2
+  for d in "${missing[@]}"; do echo "  - $d" >&2; done
+  echo "解决方案：" >&2
+  echo "1) 在有网络的机器下载 opencompass 数据集压缩包并解压到 $COMPASS_DATA_CACHE/ 对应目录；或" >&2
+  echo "2) 临时放开该机到 opencompass.oss-cn-shanghai.aliyuncs.com 的访问；或" >&2
+  echo "3) 修改 COMPASS_DATA_CACHE 指向已有数据集的共享路径。" >&2
+  exit 1
+fi
 
 # 统计本次将运行的评测集数量
 ds_count=$(python - "$config_path" <<'PY'
