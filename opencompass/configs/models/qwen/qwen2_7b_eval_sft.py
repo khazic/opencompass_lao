@@ -1,15 +1,10 @@
-# flake8: noqa
 from mmengine.config import read_base
+from opencompass.models import HuggingFaceCausalLM
 from opencompass.partitioners import NaivePartitioner, NumWorkerPartitioner
 from opencompass.runners import LocalRunner
 from opencompass.tasks import OpenICLEvalTask, OpenICLInferTask
-from opencompass.models import HuggingFaceCausalLM
 
-#######################################################################
-#                          PART 0  Essential Configs                    #
-#######################################################################
 with read_base():
-    # Datasets Part
     from opencompass.configs.datasets.aime2024.aime2024_0shot_nocot_genericllmeval_academic_gen import aime2024_datasets
     from opencompass.configs.datasets.bbh.bbh_0shot_nocot_academic_gen import bbh_datasets
     from opencompass.configs.datasets.gpqa.gpqa_openai_simple_evals_gen_5aeece import gpqa_datasets
@@ -19,19 +14,6 @@ with read_base():
     from opencompass.configs.datasets.mmlu_pro.mmlu_pro_gen import mmlu_pro_datasets
     from opencompass.configs.datasets.livecodebench.livecodebench_gen_a4f90b import LCB_datasets
 
-# 先定义所有数据集
-all_datasets = (
-    aime2024_datasets +
-    bbh_datasets +
-    gpqa_datasets +
-    humaneval_datasets +
-    ifeval_datasets +
-    math_datasets +
-    mmlu_pro_datasets +
-    LCB_datasets
-)
-
-# 定义模型
 models = [dict(
     type=HuggingFaceCausalLM,
     path='/xfr_ceph_sh/liuchonghan/OpenRLHF/examples/scripts/checkpoint/qwen2_5_sft_domain',
@@ -48,12 +30,20 @@ models = [dict(
     ),
     max_out_len=32768,
     max_seq_len=32768,
-    batch_size=8,
-    run_cfg=dict(num_gpus=8)
+    batch_size=4,
+    run_cfg=dict(num_gpus=4)
 )]
 
-# 使用预先定义的数据集列表
-datasets = all_datasets
+datasets = (
+    aime2024_datasets +
+    bbh_datasets +
+    gpqa_datasets +
+    humaneval_datasets +
+    ifeval_datasets +
+    math_datasets +
+    mmlu_pro_datasets +
+    LCB_datasets
+)
 
 # LLM judge config
 judge_cfg = dict()
@@ -62,9 +52,6 @@ for dataset in datasets:
     if 'judge_cfg' in dataset['eval_cfg']['evaluator']:
         dataset['eval_cfg']['evaluator']['judge_cfg'] = judge_cfg
 
-#######################################################################
-#                       PART 2  Dataset Summarizer                     #
-#######################################################################
 core_summary_groups = [
     {
         'name': 'core_average',
@@ -106,14 +93,11 @@ summarizer = dict(
     summary_groups=core_summary_groups,
 )
 
-#######################################################################
-#                 PART 4  Inference/Evaluation Configuration          #
-#######################################################################
 infer = dict(
-    partitioner=dict(type=NumWorkerPartitioner, num_worker=8),
+    partitioner=dict(type=NumWorkerPartitioner, num_worker=4),
     runner=dict(
         type=LocalRunner,
-        max_num_workers=16,
+        max_num_workers=8,
         task=dict(type=OpenICLInferTask)))
 
 eval = dict(
@@ -123,7 +107,4 @@ eval = dict(
         max_num_workers=16,
         task=dict(type=OpenICLEvalTask)))
 
-#######################################################################
-#                      PART 5  Utils Configuration                    #
-#######################################################################
-work_dir = './outputs/oc_academic_202502'
+work_dir = './outputs/oc_academic_202502_sft'
