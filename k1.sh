@@ -6,14 +6,10 @@ MODEL_BASE="/xfr_ceph_sh/liuchonghan/paper_model"
 DATASETS="mmlu_gen humaneval_gen cmmlu_gen bbh_gen hellaswag_gen winogrande_gen"
 # 模型和对应的GPU
 declare -A MODEL_GPU=(
-    ["RLer_MtPO_allenai_025"]="0"
     ["apertus-8b"]="1"
     ["aya-expanse-8b"]="2"
-    ["depsk-7b"]="3"
     ["emma-500"]="4"
     ["gamme3-27b"]="5"
-    ["llama3.1-8b"]="6"
-    ["llamax3-8b"]="7"
 )
 
 # 创建输出目录
